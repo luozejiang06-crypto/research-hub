@@ -102,7 +102,10 @@ st.sidebar.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06);'>", un
 st.sidebar.markdown("<h4 style='color: #38bdf8;'>📁 研报搜索与上传</h4>", unsafe_allow_html=True)
 
 all_files = sorted([f for f in os.listdir(VAULT_DIR) if f.lower().endswith('.pdf')])
-search_query = st.sidebar.text_input("搜索研报名称：", "")
+
+# 监听来自日经/标普终端传递的股票代码参数
+url_param = st.query_params.get("q", "")
+search_query = st.sidebar.text_input("搜索研报名称：", value=url_param)
 filtered_files = [f for f in all_files if search_query.lower() in f.lower()] if search_query else all_files
 
 st.sidebar.caption(f"当前共有 {len(all_files)} 份研报")
