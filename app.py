@@ -73,9 +73,12 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# ----------------- 互通导航条 -----------------
 st.markdown("""
-<div style="margin-bottom: 12px;">
-    <span class="terminal-title">📑 金融研报智库</span>
+<div style="display: flex; gap: 10px; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+    <a href="https://nikkei225-terminal-mzohipvya5trccentexb77.streamlit.app/" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 0.85rem; padding: 5px 12px; border-radius: 4px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);">⚡ 日经225量化终端</a>
+    <a href="https://lzjppy123.streamlit.app/" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 0.85rem; padding: 5px 12px; border-radius: 4px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);">🇺🇸 标普500量化终端</a>
+    <span style="color: #f59e0b; font-size: 0.85rem; padding: 5px 12px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); font-weight: bold;">📑 机构研报智库 (当前)</span>
 </div>
 """, unsafe_allow_html=True)
 
