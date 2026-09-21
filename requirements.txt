@@ -1,6 +1,7 @@
-streamlit
-pypdfium2
-pillow
-numpy
-deep-translator
-rapidocr-onnxruntime
+streamlit
+pypdfium2
+pillow
+numpy
+deep-translator
+rapidocr-onnxruntime
+opencv-python-headless
