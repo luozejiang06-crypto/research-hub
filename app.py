@@ -85,12 +85,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ----------------- 翻译函数 -----------------
+# ----------------- 翻译引擎 -----------------
 @st.cache_data(ttl=86400)
 def translate_text(text, src='auto', tgt='zh-CN'):
     if not text or not text.strip():
         return ""
-    cleaned = " ".join(text.split())[:1800]
+    cleaned = " ".join(text.split())[:2000]
     try:
         res = GoogleTranslator(source=src, target=tgt).translate(cleaned)
         if res: return res
@@ -103,13 +103,13 @@ def translate_text(text, src='auto', tgt='zh-CN'):
         pass
     return "翻译服务响应超时，请稍后重试。"
 
-# ----------------- 侧边栏：研报文库与检索 (支持 URL 参数穿透) -----------------
+# ----------------- 侧边栏：研报文库与检索 -----------------
 st.sidebar.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
 st.sidebar.markdown("<h4 style='color: #38bdf8;'>📁 研报搜索与上传</h4>", unsafe_allow_html=True)
 
 all_files = sorted([f for f in os.listdir(VAULT_DIR) if f.lower().endswith('.pdf')])
 
-# 自动捕获来自日经/标普终端传递的股票代码参数 (?q=...)
+# 监听来自日经/标普终端传递的股票代码参数
 url_param = st.query_params.get("q", "")
 search_query = st.sidebar.text_input("搜索研报名称：", value=url_param)
 filtered_files = [f for f in all_files if search_query.lower() in f.lower()] if search_query else all_files
@@ -127,7 +127,7 @@ with st.sidebar.expander("上传新研报 (PDF)", expanded=False):
 
 st.sidebar.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
 st.sidebar.markdown("<h4 style='color: #38bdf8;'>⚙️ 阅读设置</h4>", unsafe_allow_html=True)
-view_mode = st.sidebar.radio("阅读模式：", ["连续长图模式", "单页翻页模式"], index=0)
+view_mode = st.sidebar.radio("阅读模式：", ["单页翻页模式", "连续长图模式"], index=0)
 render_scale = st.sidebar.select_slider("清晰度：", options=[1.5, 2.0, 2.5], value=2.0)
 
 # ----------------- 主界面 -----------------
@@ -163,63 +163,69 @@ else:
             use_container_width=True
         )
 
-    tab_reader, tab_ocr_translate = st.tabs(["📑 研报阅读", "📷 截图识别与翻译"])
-
     doc = pdfium.PdfDocument(pdf_full_path)
     total_pages = len(doc)
 
-    with tab_reader:
+    # 左右双栏：左侧看原件，右侧直接一键识图翻译
+    col_pdf, col_trans = st.columns([1.15, 1])
+
+    with col_pdf:
+        st.markdown("<h5 style='color: #38bdf8;'>📑 研报原件阅读</h5>", unsafe_allow_html=True)
         if view_mode == "单页翻页模式":
-            col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
-            with col_c2:
-                page_num = st.slider("页码：", min_value=1, max_value=total_pages, value=1)
-            st.caption(f"第 {page_num} / {total_pages} 页")
-            
+            page_num = st.slider("阅读页码：", min_value=1, max_value=total_pages, value=1)
             page = doc[page_num - 1]
             pil_img = page.render(scale=render_scale).to_pil()
-            st.image(pil_img, use_container_width=True)
+            st.image(pil_img, caption=f"第 {page_num} / {total_pages} 页", use_container_width=True)
         else:
+            page_num = 1
             st.caption(f"全文共 {total_pages} 页")
             for i in range(total_pages):
                 page = doc[i]
                 pil_img = page.render(scale=render_scale).to_pil()
                 st.image(pil_img, caption=f"第 {i + 1} 页", use_container_width=True)
 
-    with tab_ocr_translate:
-        st.markdown("<h5 style='color: #38bdf8;'>📷 截图识别与翻译</h5>", unsafe_allow_html=True)
-        st.caption("使用快捷键 **Win + Shift + S** 框选研报中的任意段落或图表，保存后上传即可：")
+    with col_trans:
+        st.markdown("<h5 style='color: #38bdf8;'>🌐 当前页原生识图与精译</h5>", unsafe_allow_html=True)
+        st.caption(f"直接对正在阅读的 **第 {page_num} 页** 执行纯图像深度识别（无需截图，无视投行排版图层）：")
 
-        col_left, col_right = st.columns([1, 1])
+        if st.button(f"⚡ 提取并翻译第 {page_num} 页", use_container_width=True):
+            with st.spinner("正在对当前页面进行 OCR 识图解析..."):
+                # 获取当前查看的这一页渲染图
+                curr_page = doc[page_num - 1]
+                ocr_img = curr_page.render(scale=2.0).to_pil()
+                img_np = np.array(ocr_img.convert('RGB'))
+                
+                # 直接通过 OCR 模型识别整页图像
+                ocr_result, _ = ocr_engine(img_np)
+                
+                if not ocr_result:
+                    st.warning("该页未识别出文字内容。")
+                else:
+                    lines = [item[1] for item in ocr_result]
+                    full_page_text = "\n".join(lines)
+                    st.session_state["curr_page_ocr"] = full_page_text
+                    st.session_state["curr_page_zh"] = translate_text(full_page_text, tgt='zh-CN')
 
-        with col_left:
-            uploaded_snap = st.file_uploader("上传截图 (PNG / JPG)：", type=["png", "jpg", "jpeg"])
+        if "curr_page_ocr" in st.session_state:
+            st.markdown("<b>🇨🇳 中文翻译结果：</b>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="glass-card" style="border-left: 4px solid #10b981; font-size: 0.95rem; line-height: 1.7; max-height: 400px; overflow-y: auto;">
+                {st.session_state["curr_page_zh"]}
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.expander("查看识图提取到的原文 (OCR 文本)", expanded=False):
+                st.text_area("提取文本：", value=st.session_state["curr_page_ocr"], height=200)
+
+        st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06); margin: 15px 0;'>", unsafe_allow_html=True)
+        with st.expander("✂️ 手动上传局部截图翻译 (备用)", expanded=False):
+            uploaded_snap = st.file_uploader("拖入局部截图：", type=["png", "jpg", "jpeg"])
             if uploaded_snap:
                 snap_img = Image.open(uploaded_snap).convert('RGB')
-                st.image(snap_img, caption="已上传截图", use_container_width=True)
-                
-                if st.button("开始识别并翻译成中文", use_container_width=True):
-                    with st.spinner("正在识别文字..."):
-                        img_np = np.array(snap_img)
-                        ocr_result, _ = ocr_engine(img_np)
-                        
-                        if not ocr_result:
-                            st.warning("未识别出文字，请确认图片清晰度。")
-                        else:
-                            extracted_lines = [line[1] for line in ocr_result]
-                            full_extracted = "\n".join(extracted_lines)
-                            st.session_state["ocr_text"] = full_extracted
-                            st.session_state["ocr_zh"] = translate_text(full_extracted, tgt='zh-CN')
-
-        with col_right:
-            if "ocr_text" in st.session_state:
-                st.markdown("<b>原文内容：</b>", unsafe_allow_html=True)
-                st.text_area("识别结果（可直接修改）：", value=st.session_state["ocr_text"], height=160)
-                
-                st.markdown("<b>中文翻译：</b>", unsafe_allow_html=True)
-                st.markdown(f"""
-                <div class="glass-card" style="border-left: 4px solid #10b981; font-size: 0.98rem; line-height: 1.7;">
-                    {st.session_state["ocr_zh"]}
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.info("请在左侧上传截图，点击识别后此处将显示原文与中文翻译对照。")
+                if st.button("识别该截图", use_container_width=True):
+                    with st.spinner("识别中..."):
+                        res, _ = ocr_engine(np.array(snap_img))
+                        if res:
+                            txt = "\n".join([x[1] for x in res])
+                            zh = translate_text(txt, tgt='zh-CN')
+                            st.markdown(f"<div class='glass-card' style='border-left: 4px solid #38bdf8;'>{zh}</div>", unsafe_allow_html=True)
