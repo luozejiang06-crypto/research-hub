@@ -85,23 +85,56 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ----------------- 翻译引擎 -----------------
+# ----------------- 稳健分块翻译引擎 -----------------
 @st.cache_data(ttl=86400)
 def translate_text(text, src='auto', tgt='zh-CN'):
     if not text or not text.strip():
         return ""
-    cleaned = " ".join(text.split())[:2000]
-    try:
-        res = GoogleTranslator(source=src, target=tgt).translate(cleaned)
-        if res: return res
-    except Exception:
-        pass
-    try:
-        res = MyMemoryTranslator(source=src, target=tgt).translate(cleaned[:800])
-        if res and "MYMEMORY" not in str(res).upper(): return res
-    except Exception:
-        pass
-    return "翻译服务响应超时，请稍后重试。"
+    
+    # 1. 过滤乱码与空行，按句子/段落重组
+    lines = [line.strip() for line in text.splitlines() if len(line.strip()) > 1]
+    if not lines:
+        return ""
+
+    # 2. 将整页长文本切分成 400~500 字符的独立文本块，避免接口风控与超时
+    chunks = []
+    current_chunk = []
+    current_len = 0
+    
+    for line in lines:
+        if current_len + len(line) > 450:
+            chunks.append(" ".join(current_chunk))
+            current_chunk = [line]
+            current_len = len(line)
+        else:
+            current_chunk.append(line)
+            current_len += len(line)
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
+    # 3. 逐块翻译并拼接（单页最多翻译前 6 个核心文本块，保障响应速度）
+    translated_parts = []
+    translator = GoogleTranslator(source=src, target=tgt)
+    
+    for chunk in chunks[:6]:
+        if not chunk.strip():
+            continue
+        try:
+            res = translator.translate(chunk)
+            if res:
+                translated_parts.append(res)
+        except Exception:
+            # 备用引擎兜底
+            try:
+                backup_res = MyMemoryTranslator(source='en-US', target='zh-CN').translate(chunk[:300])
+                if backup_res and "MYMEMORY" not in str(backup_res).upper():
+                    translated_parts.append(backup_res)
+            except Exception:
+                pass
+
+    if translated_parts:
+        return "\n\n".join(translated_parts)
+    return "当前网络连接翻译服务波动，请重新点击提取或检查网络代理设置。"
 
 # ----------------- 侧边栏：研报文库与检索 -----------------
 st.sidebar.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
