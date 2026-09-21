@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import base64
 from datetime import datetime
 import pypdfium2 as pdfium
 from PIL import Image
@@ -24,18 +25,24 @@ def load_ocr():
 
 ocr_engine = load_ocr()
 
-# ----------------- 主题配色 -----------------
-THEMES = {
-    "深蓝夜间": "radial-gradient(ellipse at 20% 20%, #0d1527 0%, #05070d 100%)",
-    "极简纯黑": "linear-gradient(135deg, #090a0f 0%, #121620 100%)",
-    "深海深蓝": "radial-gradient(circle at 50% 0%, #0f1c3f 0%, #060913 100%)",
-    "暗黑暖棕": "linear-gradient(180deg, #0a0805 0%, #140e06 100%)"
-}
+# ----------------- 背景图加载与暗化处理 -----------------
+def get_custom_bg_style():
+    bg_path = "bg.jpg"
+    if os.path.exists(bg_path):
+        with open(bg_path, "rb") as f:
+            b64_data = base64.b64encode(f.read()).decode()
+        # 叠加深黑磨砂遮罩，保证文字与研报清晰阅读
+        return f"""
+            background-image: linear-gradient(rgba(7, 11, 20, 0.85), rgba(7, 11, 20, 0.90)), url("data:image/jpeg;base64,{b64_data}");
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        """
+    else:
+        return "background: radial-gradient(ellipse at 20% 20%, #0d1527 0%, #05070d 100%);"
 
-# ----------------- 侧边栏：主题设置 -----------------
-st.sidebar.markdown("<h4 style='color: #f59e0b;'>🎨 主题设置</h4>", unsafe_allow_html=True)
-selected_theme = st.sidebar.selectbox("主题选择：", list(THEMES.keys()), index=0)
-bg_style = f"background: {THEMES[selected_theme]};"
+bg_style = get_custom_bg_style()
 
 st.markdown(f"""
 <style>
@@ -45,7 +52,8 @@ st.markdown(f"""
         color: #f1f5f9 !important;
     }}
     section[data-testid="stSidebar"] {{
-        background-color: rgba(6, 9, 16, 0.85) !important;
+        background-color: rgba(6, 9, 16, 0.82) !important;
+        backdrop-filter: blur(12px);
         border-right: 1px solid rgba(245, 158, 11, 0.25) !important;
     }}
     .terminal-title {{
@@ -54,15 +62,16 @@ st.markdown(f"""
         color: #f1f5f9;
     }}
     .glass-card {{
-        background: rgba(15, 23, 42, 0.75);
-        border: 1px solid rgba(56, 189, 248, 0.2);
+        background: rgba(15, 23, 42, 0.78);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(56, 189, 248, 0.25);
         border-radius: 8px;
         padding: 14px 18px;
         margin-bottom: 14px;
     }}
     div[data-testid="stImage"] img {{
         border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         margin-bottom: 14px;
     }}
     textarea, input {{
@@ -105,8 +114,7 @@ def translate_text(text, src='auto', tgt='zh-CN'):
         pass
     return "翻译服务暂时响应超时，请稍后重试。"
 
-# ----------------- 侧边栏：研报文库与检索 (支持 URL 参数联动) -----------------
-st.sidebar.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
+# ----------------- 侧边栏：研报文库与检索 -----------------
 st.sidebar.markdown("<h4 style='color: #38bdf8;'>📁 研报搜索与上传</h4>", unsafe_allow_html=True)
 
 all_files = sorted([f for f in os.listdir(VAULT_DIR) if f.lower().endswith('.pdf')])
@@ -115,7 +123,7 @@ url_param = st.query_params.get("q", "")
 search_query = st.sidebar.text_input("搜索研报名称：", value=url_param)
 filtered_files = [f for f in all_files if search_query.lower() in f.lower()] if search_query else all_files
 
-st.sidebar.caption(f"智库在册文档: {len(all_files)} 份 // 筛选出: {len(filtered_files)} 份")
+st.sidebar.caption(f"当前共有 {len(all_files)} 份研报 // 筛选出: {len(filtered_files)} 份")
 
 with st.sidebar.expander("上传新研报 (PDF)", expanded=False):
     uploaded = st.file_uploader("选择或拖拽 PDF 文件：", type=["pdf"])
@@ -164,7 +172,6 @@ else:
             use_container_width=True
         )
 
-    # 选项卡结构：研报阅读为主，截图翻译为辅
     tab_reader, tab_ocr = st.tabs(["📑 研报原件阅读", "📷 截图识别与翻译"])
 
     doc = pdfium.PdfDocument(pdf_full_path)
