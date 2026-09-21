@@ -73,8 +73,11 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- 互通导航条 -----------------
+# ----------------- 顶栏：标题与三站互通导航条 -----------------
 st.markdown("""
+<div style="margin-bottom: 8px;">
+    <span class="terminal-title">📑 金融研报智库</span>
+</div>
 <div style="display: flex; gap: 10px; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
     <a href="https://nikkei225-terminal-mzohipvya5trccentexb77.streamlit.app/" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 0.85rem; padding: 5px 12px; border-radius: 4px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);">⚡ 日经225量化终端</a>
     <a href="https://lzjppy123.streamlit.app/" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 0.85rem; padding: 5px 12px; border-radius: 4px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);">🇺🇸 标普500量化终端</a>
@@ -100,18 +103,18 @@ def translate_text(text, src='auto', tgt='zh-CN'):
         pass
     return "翻译服务响应超时，请稍后重试。"
 
-# ----------------- 侧边栏：研报文库与检索 -----------------
+# ----------------- 侧边栏：研报文库与检索 (支持 URL 参数穿透) -----------------
 st.sidebar.markdown("<hr style='border: 1px solid rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
 st.sidebar.markdown("<h4 style='color: #38bdf8;'>📁 研报搜索与上传</h4>", unsafe_allow_html=True)
 
 all_files = sorted([f for f in os.listdir(VAULT_DIR) if f.lower().endswith('.pdf')])
 
-# 监听来自日经/标普终端传递的股票代码参数
+# 自动捕获来自日经/标普终端传递的股票代码参数 (?q=...)
 url_param = st.query_params.get("q", "")
 search_query = st.sidebar.text_input("搜索研报名称：", value=url_param)
 filtered_files = [f for f in all_files if search_query.lower() in f.lower()] if search_query else all_files
 
-st.sidebar.caption(f"当前共有 {len(all_files)} 份研报")
+st.sidebar.caption(f"当前共有 {len(all_files)} 份研报 // 筛选出 {len(filtered_files)} 份")
 
 with st.sidebar.expander("上传新研报 (PDF)", expanded=False):
     uploaded = st.file_uploader("选择或拖拽 PDF 文件：", type=["pdf"])
